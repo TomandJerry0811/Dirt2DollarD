@@ -61,3 +61,17 @@ The report-generation frontend test uses mocked responses. The existing real Rep
 No API routes are intercepted in these tests. Provider adapters use an in-memory database and controlled AI/embedding/Google Sheets responses. The API response, persistence and provider activity are independently asserted.
 
 The authentication, AI analysis, and clients tests remain included. The generated Playwright website sample is excluded. This suite does not cover the newer floating AI assistant chat endpoint.
+
+## Spreadsheet node contracts (additional suite)
+
+`playwright.nodes.config.ts` registers 189 additional tests, one per source ID
+TC01–TC189, in 16 feature groups. These are real Python node contracts executed by
+Playwright with controlled dependencies, separate from the original 50 scenarios
+above. Total registered scenarios across the three configurations: 239.
+
+Original sheet inputs, expected results, observed historical results and statuses
+are preserved in tests/playwright_node_cases.json. Historical Pass/Fail is never
+used to skip a case, mark an expected failure, or replace an assertion.
+
+See LISTED_NODE_TESTS.md and LISTED_NODE_TEST_RESULTS.md. No production application
+code or existing test body is changed by the additional-node-suite patch.

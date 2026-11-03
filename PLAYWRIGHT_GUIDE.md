@@ -69,3 +69,15 @@ Latest application changes are preserved. This transfer adds accessible labels t
 ## Five pending scenarios
 
 These are written but marked test.fixme: selected-client KPI Analytics, overview summary, historical similarity, recommendations, and frontend report file download. Those product areas still use seeded/hardcoded content or lack a download handler. Skipped tests are not passing tests. Backend TXT attachment retrieval is separately executable. The mocked PDF-generation UI test does not prove live report generation or PDF download.
+
+## Additional 189 listed backend-node cases
+
+The separate node-contract suite maps TC01–TC189 from the supplied spreadsheet to
+individual Playwright tests. Run `npm run test:nodes:ui` from frontend after setting
+PLAYWRIGHT_PYTHON to the existing controlled-test Python interpreter. These tests
+run actual Python nodes through a CLI adapter; no browser or server is launched.
+The original 50 scenarios and their existing commands remain unchanged.
+
+See LISTED_NODE_TESTS.md for setup, fixture assumptions and architecture, and
+LISTED_NODE_TEST_RESULTS.md for the measured 189-case result and failures. The
+original 45 passed / 5 skipped snapshot does not describe these new node cases.

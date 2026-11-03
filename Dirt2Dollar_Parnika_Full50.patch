@@ -1,0 +1,1436 @@
+diff --git a/.gitignore b/.gitignore
+index c2a65db..b2d905b 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -52,4 +52,7 @@ frontend-recovered/
+ .vscode/
+ .idea/
+ .DS_Store
+-Thumbs.db
+\ No newline at end of file
++Thumbs.db
++
++# Controlled Playwright backend environment
++.venv-playwright/
+diff --git a/PLAYWRIGHT_GUIDE.md b/PLAYWRIGHT_GUIDE.md
+new file mode 100644
+index 0000000..e12be23
+--- /dev/null
++++ b/PLAYWRIGHT_GUIDE.md
+@@ -0,0 +1,71 @@
++# Dirt2Dollar Playwright: full 50-scenario suite
++
++This branch adds the complete earlier suite to the latest repository source: **40 frontend scenarios (35 executable, 5 pending)** plus **10 controlled FastAPI integration scenarios**. See TEST_COVERAGE.md for scope and limitations.
++
++## Frontend setup (PowerShell)
++
++Use Node.js 20 or newer. From the project root:
++
++```powershell
++cd frontend
++npm ci
++npx playwright install chromium
++npm run test:e2e:typecheck
++npm run test:e2e:headed
++npm run test:e2e:report
++```
++
++Playwright starts its own Vite server on localhost:3000 with VITE_API_BASE_URL=/api/v1. Close existing servers on port 3000 first. The browser uses the actual UI and demo login. Responses under /api/v1 are mocked; no real backend or API keys are required. The fixture fails unexpected API requests and allows Vite source modules to load normally.
++
++## Controlled backend integration setup (PowerShell)
++
++From the frontend folder:
++
++```powershell
++cd ..
++python -m venv .venv-playwright
++.\.venv-playwright\Scripts\python.exe -m pip install -r requirements-playwright.txt
++cd frontend
++$env:PLAYWRIGHT_PYTHON = (Resolve-Path "..\.venv-playwright\Scripts\python.exe").Path
++npm run test:integration -- --headed
++```
++
++Ports 3000 and 8002 must be free. The integration config starts the dedicated loopback FastAPI entrypoint and frontend automatically. Actual FastAPI routes, controllers, repositories, and analysis workflow execute; only external Supabase, Groq, Google Sheets, and embedding provider boundaries use controlled replacements. No real credentials or production data are needed.
++
++`tests/playwright_backend.py` is for local testing only; never deploy that entrypoint. Production `src.main:app` has no test endpoints. The existing newer AI assistant and its route remain present; these 50 scenarios do not test that chat feature.
++
++## Commands
++
++```powershell
++npm run test:e2e
++npm run test:e2e:ui
++npm run test:integration
++npm run test:all
++npx playwright show-report playwright-report-integration
++```
++
++`test:all` executes frontend first, then integration. Set PLAYWRIGHT_PYTHON in that terminal before running it. Frontend and integration have separate report and test-output directories. Traces and screenshots are retained on failure. Generated output, credentials, and virtual environments are not committed.
++
++PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH optionally selects a compatible existing browser. Normally leave it unset and install Playwright's Chromium.
++
++## Files
++
++- frontend/e2e/auth.spec.ts: 10 authentication scenarios.
++- frontend/e2e/ai-analysis.spec.ts: 5 analysis frontend scenarios.
++- frontend/e2e/clients.spec.ts: 8 client-list frontend scenarios.
++- frontend/e2e/client-details.spec.ts: 2 executable and 4 pending scenarios.
++- frontend/e2e/dashboard.spec.ts: 4 dashboard scenarios.
++- frontend/e2e/workflows.spec.ts: 4 workflow frontend scenarios.
++- frontend/e2e/reports.spec.ts: 2 executable and 1 pending scenario.
++- frontend/e2e/integration/backend.spec.ts: 10 controlled real-backend scenarios.
++- frontend/e2e/helpers/: common fixtures, login, API mocks, and test data.
++- frontend/playwright.config.ts and playwright.integration.config.ts: suite configuration.
++- tests/playwright_backend.py and requirements-playwright.txt: integration harness and Python dependencies.
++
++## Minimal application changes
++
++Latest application changes are preserved. This transfer adds accessible labels to client controls, explicit dashboard loading/empty states, preservation of formatted percentage strings, real client query filters, and a lazy SentenceTransformer import so controlled tests need not install/download that model. The existing client scope and production provider behavior remain intact. Stale AI assistant, backend entrypoint, and KPI-node files from the uploaded ZIP are not copied over the current repository.
++
++## Five pending scenarios
++
++These are written but marked test.fixme: selected-client KPI Analytics, overview summary, historical similarity, recommendations, and frontend report file download. Those product areas still use seeded/hardcoded content or lack a download handler. Skipped tests are not passing tests. Backend TXT attachment retrieval is separately executable. The mocked PDF-generation UI test does not prove live report generation or PDF download.
+diff --git a/TEST_COVERAGE.md b/TEST_COVERAGE.md
+new file mode 100644
+index 0000000..5a18dff
+--- /dev/null
++++ b/TEST_COVERAGE.md
+@@ -0,0 +1,63 @@
++# Test coverage
++
++| Suite | Scenarios | Executable now | Pending |
++| --- | ---: | ---: | ---: |
++| Authentication | 10 | 10 | 0 |
++| AI Analysis | 5 | 5 | 0 |
++| Clients, mocked API | 8 | 8 | 0 |
++| Client Details | 6 | 2 | 4 |
++| Dashboard | 4 | 4 | 0 |
++| Workflows | 4 | 4 | 0 |
++| Reports, mocked API | 3 | 2 | 1 |
++| Real FastAPI integration | 10 | 10 | 0 |
++| Total | 50 | 45 | 5 |
++
++## Client Details
++
++1. Health score and MRR match selected-client API values.
++2. Churn probability and identity match a different selected client.
++3. KPI Analytics values come from the selected client — pending: uses seeded trends.
++4. Summary comes from selected-client metadata — pending: hardcoded overview summary.
++5. History renders selected-client similarity records — pending: seeded history list.
++6. Recommendations match selected-client action items — pending: seeded recommendations.
++
++## Dashboard
++
++1. All six metrics match a controlled API response, including formatted percentage and currency.
++2. Loading status remains visible until the metrics response completes.
++3. Zero clients show an empty state with zero-valued metrics.
++4. API failure displays its message, and retry restores metrics.
++
++## Workflows
++
++1. Run Workflow sends exactly one POST to /workflows/w-101/execute.
++2. Completed execution response displays completion.
++3. Failed execution response displays failure.
++4. History shows API records and search selects the right execution.
++
++These cover frontend request/response behavior. They do not verify live monitor execution/history persistence; the analysis integration test covers the real AI pipeline through its analysis endpoint.
++
++## Reports
++
++1. Library displays API report name, client, status and format.
++2. Generation posts selected configuration and refreshes the library with the returned report.
++3. Actual browser download and file content — pending: UI download control is not connected.
++
++The report-generation frontend test uses mocked responses. The existing real ReportsController requires clientId, whereas the generation form currently chooses clientName only; therefore successful real report generation through that form remains a product gap. Generation currently returns report metadata without durable report storage. This was not hidden by counting mocked tests as backend integration.
++
++## Real FastAPI integration
++
++1. Full analysis: real HTTP endpoint, all workflow stages, browser display and persisted final result.
++2. Empty query rejected with 400 before provider calls.
++3. Missing required query field rejected with 422.
++4. Controlled external provider failure reaches the browser as 502.
++5. Real clients endpoint search.
++6. Real clients endpoint risk filter.
++7. Real clients endpoint status filter.
++8. Real clients endpoint combined filters.
++9. Browser list/search/filter behavior through the real API with controlled repository data.
++10. Existing backend report download endpoint returns a TXT attachment with selected-client content.
++
++No API routes are intercepted in these tests. Provider adapters use an in-memory database and controlled AI/embedding/Google Sheets responses. The API response, persistence and provider activity are independently asserted.
++
++The authentication, AI analysis, and clients tests remain included. The generated Playwright website sample is excluded. This suite does not cover the newer floating AI assistant chat endpoint.
+diff --git a/TEST_RESULTS.md b/TEST_RESULTS.md
+new file mode 100644
+index 0000000..6a36096
+--- /dev/null
++++ b/TEST_RESULTS.md
+@@ -0,0 +1,19 @@
++# Full 50-scenario validation — 2026-10-15
++
++Base: Karann1101/Dirt2Dollar main, c83b7adffb87551123723c8212d96f0cff2cc678.
++
++| Suite | Total | Passed | Skipped | Failed |
++| --- | ---: | ---: | ---: | ---: |
++| Frontend | 40 | 35 | 5 | 0 |
++| Controlled real FastAPI integration | 10 | 10 | 0 | 0 |
++| Total | 50 | 45 | 5 | 0 |
++
++Verified with Playwright 1.64.1 and compatible Chromium 153.0.8010.0, headless on Linux. The standard browser download was unavailable here, so PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH selected an existing compatible browser. Windows headed runs and live external providers were not tested here.
++
++Additional checks: Playwright TypeScript typecheck, production frontend build, and changed Python source syntax passed. The production build retains its existing large-bundle warning.
++
++Five explicit test.fixme scenarios remain pending: selected-client KPI Analytics, overview summary, history, recommendations, and frontend file download. Their application functionality is not yet fully wired. They are not counted as passes.
++
++The latest AI assistant component, agent endpoint registration, and KPI workflow nodes are preserved. Existing frontend dependencies, including react-markdown and remark-gfm, remain present. Only reviewed dashboard/control/filter/provider-import fixes are added alongside the tests.
++
++Run instructions: PLAYWRIGHT_GUIDE.md. Coverage and limitations: TEST_COVERAGE.md. Generated browser reports and installed dependencies are not committed.
+diff --git a/frontend/.gitignore b/frontend/.gitignore
+index a547bf3..d06fc7e 100644
+--- a/frontend/.gitignore
++++ b/frontend/.gitignore
+@@ -22,3 +22,12 @@ dist-ssr
+ *.njsproj
+ *.sln
+ *.sw?
++
++# Playwright
++/test-results/
++/playwright-report/
++/blob-report/
++/playwright/.cache/
++/playwright/.auth/
++/playwright-report-integration/
++/test-results-integration/
+diff --git a/frontend/e2e/ai-analysis.spec.ts b/frontend/e2e/ai-analysis.spec.ts
+new file mode 100644
+index 0000000..b041254
+--- /dev/null
++++ b/frontend/e2e/ai-analysis.spec.ts
+@@ -0,0 +1,89 @@
++import { test, expect } from './helpers/fixtures';
++import { login } from './helpers/auth';
++import { analysis, query } from './helpers/data';
++import { analysisEndpoint, deferred, providerError } from './helpers/api';
++
++const input = (page: import('@playwright/test').Page) => page.getByPlaceholder('e.g. Give me churn analysis for Yardworx Land Management');
++const run = (page: import('@playwright/test').Page) => page.getByRole('button', { name: 'Analyze Risk', exact: true });
++
++async function expectSuccess(page: import('@playwright/test').Page) {
++  await expect(page.getByRole('heading', { name: 'Test Client 01', exact: true })).toBeVisible();
++  await expect(page.getByText(analysis.summary.text!, { exact: true })).toBeVisible();
++  await expect(page.getByText('75%', { exact: true })).toBeVisible();
++  await expect(page.getByText('high', { exact: true })).toBeVisible();
++  await expect(page.getByText('Schedule a retention call.', { exact: true })).toBeVisible();
++}
++
++test('successful analysis displays the client, score, summary and recommendation', async ({ page }) => {
++  await page.route(analysisEndpoint, route => route.fulfill({ json: analysis }));
++  await login(page);
++  await input(page).fill(query);
++  await run(page).click();
++  await expectSuccess(page);
++});
++
++test('analysis sends the correct POST payload exactly once', async ({ page }) => {
++  const requests: { method: string; body: unknown }[] = [];
++  await page.route(analysisEndpoint, async route => {
++    requests.push({ method: route.request().method(), body: route.request().postDataJSON() });
++    await route.fulfill({ json: analysis });
++  });
++  await login(page);
++  await input(page).fill(query);
++  await run(page).click();
++  await expectSuccess(page);
++  expect(requests).toEqual([{ method: 'POST', body: { user_query: query } }]);
++});
++
++test('pending analysis shows loading and disables duplicate submission', async ({ page }) => {
++  const gate = deferred();
++  const requests: string[] = [];
++  await page.route(analysisEndpoint, async route => {
++    requests.push(route.request().method());
++    await gate.promise;
++    await route.fulfill({ json: analysis });
++  });
++  try {
++    await login(page);
++    await input(page).fill(query);
++    await run(page).click();
++    await expect(page.getByRole('heading', { name: 'RAG Pipeline Active' })).toBeVisible();
++    await expect(input(page)).toBeDisabled();
++    await expect(run(page)).toBeDisabled();
++    await expect(run(page)).toHaveAttribute('aria-busy', 'true');
++    await expect.poll(() => requests).toEqual(['POST']);
++  } finally { gate.release(); }
++  await expectSuccess(page);
++  await expect(run(page)).toBeEnabled();
++  await expect(input(page)).toBeEnabled();
++  await expect(page.getByRole('heading', { name: 'RAG Pipeline Active' })).toHaveCount(0);
++});
++
++test('provider error is displayed and the controls recover', async ({ page }) => {
++  await page.route(analysisEndpoint, providerError);
++  await login(page);
++  await input(page).fill(query);
++  await run(page).click();
++  await expect(page.getByRole('heading', { name: 'Analysis Failed' })).toBeVisible();
++  await expect(page.getByText('AI provider temporarily unavailable.', { exact: true })).toBeVisible();
++  await expect(run(page)).toBeEnabled();
++  await expect(input(page)).toBeEnabled();
++  await expect(page.getByRole('heading', { name: 'Test Client 01', exact: true })).toHaveCount(0);
++});
++
++test('retry after a provider error succeeds and clears the error', async ({ page }) => {
++  const payloads: unknown[] = [];
++  await page.route(analysisEndpoint, async route => {
++    payloads.push(route.request().postDataJSON());
++    if (payloads.length === 1) await providerError(route);
++    else await route.fulfill({ json: analysis });
++  });
++  await login(page);
++  await input(page).fill(query);
++  await run(page).click();
++  await expect(page.getByRole('heading', { name: 'Analysis Failed' })).toBeVisible();
++  await run(page).click();
++  await expectSuccess(page);
++  await expect(page.getByRole('heading', { name: 'Analysis Failed' })).toHaveCount(0);
++  expect(payloads).toEqual([{ user_query: query }, { user_query: query }]);
++});
+diff --git a/frontend/e2e/auth.spec.ts b/frontend/e2e/auth.spec.ts
+new file mode 100644
+index 0000000..75dcc5a
+--- /dev/null
++++ b/frontend/e2e/auth.spec.ts
+@@ -0,0 +1,58 @@
++import { test, expect } from './helpers/fixtures';
++import { login, logout } from './helpers/auth';
++
++for (const scenario of [
++  { title: 'both fields empty', email: '', password: '' },
++  { title: 'email empty', email: '', password: '12345' },
++  { title: 'password empty', email: 'admin@email.com', password: '' },
++]) {
++  test(`empty-field validation: ${scenario.title}`, async ({ page }) => {
++    await page.goto('/login');
++    await page.getByLabel('Email Address').fill(scenario.email);
++    await page.getByLabel('Password', { exact: true }).fill(scenario.password);
++    await page.getByRole('button', { name: 'Sign In', exact: true }).click();
++    await expect(page.getByRole('alert')).toContainText('Please enter both email and password');
++    await expect(page).toHaveURL(/\/login$/);
++  });
++}
++
++test('invalid credentials show an error', async ({ page }) => {
++  await page.goto('/login');
++  await page.getByLabel('Email Address').fill('admin@email.com');
++  await page.getByLabel('Password', { exact: true }).fill('incorrect');
++  await page.getByRole('button', { name: 'Sign In', exact: true }).click();
++  await expect(page.getByRole('alert')).toContainText('Invalid email or password');
++  await expect(page).toHaveURL(/\/login$/);
++});
++
++test('successful login returns to the requested protected page', async ({ page }) => {
++  await login(page);
++  await expect(page.getByRole('heading', { name: 'AI Intelligence Hub' })).toBeVisible();
++});
++
++test('login persists after a full refresh', async ({ page }) => {
++  await login(page);
++  await page.reload();
++  await expect(page).toHaveURL(/\/ai-analysis$/);
++  await expect(page.getByRole('heading', { name: 'AI Intelligence Hub' })).toBeVisible();
++  await expect(page.getByRole('button', { name: 'User menu' })).toBeVisible();
++});
++
++test('logout removes access and survives refresh', async ({ page }) => {
++  await login(page);
++  await logout(page);
++  await page.reload();
++  await expect(page).toHaveURL(/\/login$/);
++  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeVisible();
++});
++
++for (const destination of ['/ai-analysis', '/clients', '/client/test-1']) {
++  test(`protected page ${destination} redirects after logout`, async ({ page }) => {
++    await login(page);
++    await logout(page);
++    await page.goto(destination);
++    await expect(page).toHaveURL(/\/login$/);
++    await expect(page.getByLabel('Email Address')).toBeVisible();
++    await expect(page.getByRole('button', { name: 'User menu' })).toHaveCount(0);
++  });
++}
+diff --git a/frontend/e2e/client-details.spec.ts b/frontend/e2e/client-details.spec.ts
+new file mode 100644
+index 0000000..b1c94d9
+--- /dev/null
++++ b/frontend/e2e/client-details.spec.ts
+@@ -0,0 +1,45 @@
++import { test, expect } from './helpers/fixtures';
++import { login } from './helpers/auth';
++import { mockClients } from './helpers/api';
++import { clientSummary, clientRecommendation, historicalClient } from './helpers/extended-data';
++const metric = (page: import('@playwright/test').Page, title: string) => page.locator('.metric-card').filter({ has: page.getByText(title, { exact: true }) });
++test.beforeEach(async ({ page }) => { await mockClients(page); });
++test('selected client health score and MRR match its API record', async ({ page }) => {
++  await login(page, '/client/test-1');
++  await expect(metric(page, 'Health Score')).toContainText('40/100');
++  await expect(metric(page, 'Revenue (MRR)')).toContainText('$2.0k');
++});
++test('selected client churn probability matches its API record', async ({ page }) => {
++  await login(page, '/client/test-2');
++  await expect(metric(page, 'Churn Probability')).toContainText('15%');
++  await expect(page.getByRole('heading', { level: 1, name: 'Test Client 02' })).toBeVisible();
++});
++test('KPI Analytics displays selected-client API values', async ({ page }) => {
++  test.fixme(true, 'KPIAnalyticsTab still uses SEED_KPI_TREND; no selected-client API wiring.');
++  await page.route(/\/clients\/test-1\/kpis$/, route => route.fulfill({ json: [{ name: 'Controlled Engagement', value: 47 }] }));
++  await login(page, '/client/test-1');
++  await page.getByRole('button', { name: 'KPI Analytics', exact: true }).click();
++  await expect(page.getByText('Controlled Engagement', { exact: true })).toBeVisible();
++  await expect(page.getByText('47', { exact: true })).toBeVisible();
++});
++test('overview summary comes from the selected client', async ({ page }) => {
++  test.fixme(true, 'OverviewTab renders a hardcoded executive summary.');
++  await page.route(/\/api\/v1\/clients\/test-1$/, async route => route.fulfill({ json: { ...(await import('./helpers/data')).clients[0], metadata: { summary: clientSummary } } }));
++  await login(page, '/client/test-1');
++  await expect(page.getByText(clientSummary, { exact: true })).toBeVisible();
++});
++test('history displays selected-client API matches', async ({ page }) => {
++  test.fixme(true, 'HistoricalSimilarityTab renders SEED_HISTORICAL_CLIENTS.');
++  await page.route(/\/clients\/test-1\/history$/, route => route.fulfill({ json: [{ id: 'history-1', name: historicalClient, industry: 'SaaS', similarityScore: 87, outcome: 'retained' }] }));
++  await login(page, '/client/test-1');
++  await page.getByRole('button', { name: 'Historical Similarity', exact: true }).click();
++  await expect(page.getByText(historicalClient, { exact: true })).toBeVisible();
++  await expect(page.getByText('87%', { exact: true })).toBeVisible();
++});
++test('recommendations belong to the selected client', async ({ page }) => {
++  test.fixme(true, 'RecommendationsTab renders SEED_RECOMMENDATIONS; API action_items are not wired.');
++  await page.route(/\/clients\/test-1\/analysis$/, route => route.fulfill({ json: { data: { clientId: 'test-1', actionItems: [clientRecommendation] } } }));
++  await login(page, '/client/test-1');
++  await page.getByRole('button', { name: 'Recommendations', exact: true }).click();
++  await expect(page.getByText(clientRecommendation, { exact: true })).toBeVisible();
++});
+diff --git a/frontend/e2e/clients.spec.ts b/frontend/e2e/clients.spec.ts
+new file mode 100644
+index 0000000..589c53c
+--- /dev/null
++++ b/frontend/e2e/clients.spec.ts
+@@ -0,0 +1,104 @@
++import { test, expect } from './helpers/fixtures';
++import { login } from './helpers/auth';
++import { clients } from './helpers/data';
++import { deferred, mockClients } from './helpers/api';
++import type { Page } from '@playwright/test';
++
++const rows = (page: Page) => page.locator('table tbody tr');
++// Filter selects currently have no accessible labels. Scope by their option text.
++const riskSelect = (page: Page) => page.getByRole('combobox').filter({ has: page.getByRole('option', { name: 'Risk Level', exact: true }) });
++const statusSelect = (page: Page) => page.getByRole('combobox').filter({ has: page.getByRole('option', { name: 'Status', exact: true }) });
++const search = (page: Page) => page.getByPlaceholder('Search by Client Name, Industry, or Account Manager...');
++async function expectNames(page: Page, expected: string[]) {
++  await expect(rows(page)).toHaveCount(expected.length);
++  await expect(rows(page).locator('td:nth-child(2)')).toHaveText(expected.map(name => new RegExp(name)));
++}
++
++test('client list displays the first page of API data', async ({ page }) => {
++  await mockClients(page);
++  await login(page, '/clients');
++  await expectNames(page, clients.slice(0, 20).map(client => client.name));
++  await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
++});
++
++test('list loading skeleton is replaced by client rows', async ({ page }) => {
++  const gate = deferred();
++  await mockClients(page, gate);
++  try {
++    await login(page, '/clients');
++    // Skeleton.tsx uses aria-hidden placeholders and exposes no loading role.
++    await expect(page.locator('main .skeleton').first()).toBeVisible();
++    await expect(page.getByRole('table')).toHaveCount(0);
++  } finally { gate.release(); }
++  await expect(rows(page)).toHaveCount(20);
++  await expect(page.locator('main .skeleton')).toHaveCount(0);
++});
++
++test('search sends the query and shows matching API results', async ({ page }) => {
++  const requests = await mockClients(page);
++  await login(page, '/clients');
++  await expect(rows(page)).toHaveCount(20);
++  await search(page).fill('Test Client 03');
++  await expectNames(page, ['Test Client 03']);
++  expect(requests.some(url => url.searchParams.get('search') === 'Test Client 03')).toBe(true);
++});
++
++test('risk filter sends high risk and renders only the filtered response', async ({ page }) => {
++  const requests = await mockClients(page);
++  await login(page, '/clients');
++  await expect(rows(page)).toHaveCount(20);
++  await riskSelect(page).selectOption('high');
++  await expectNames(page, clients.filter(client => client.riskLevel === 'high').map(client => client.name));
++  expect(requests.some(url => url.searchParams.get('riskLevel') === 'high')).toBe(true);
++});
++
++test('status filter sends at-risk and renders only the filtered response', async ({ page }) => {
++  const requests = await mockClients(page);
++  await login(page, '/clients');
++  await expect(rows(page)).toHaveCount(20);
++  await statusSelect(page).selectOption('at-risk');
++  await expectNames(page, clients.filter(client => client.status === 'at-risk').map(client => client.name));
++  expect(requests.some(url => url.searchParams.get('status') === 'at-risk')).toBe(true);
++});
++
++test('combined filters and Clear All update the list', async ({ page }) => {
++  const requests = await mockClients(page);
++  await login(page, '/clients');
++  await expect(rows(page)).toHaveCount(20);
++  await riskSelect(page).selectOption('high');
++  await expect(rows(page)).toHaveCount(13);
++  await statusSelect(page).selectOption('at-risk');
++  await expectNames(page, clients.filter(client => client.riskLevel === 'high' && client.status === 'at-risk').map(client => client.name));
++  expect(requests.some(url => url.searchParams.get('riskLevel') === 'high' && url.searchParams.get('status') === 'at-risk')).toBe(true);
++  await page.getByRole('button', { name: 'Clear All', exact: true }).click();
++  await expectNames(page, clients.slice(0, 20).map(client => client.name));
++  await expect(riskSelect(page)).toHaveValue('');
++  await expect(statusSelect(page)).toHaveValue('');
++});
++
++test('pagination changes rows and page size resets to the first page', async ({ page }) => {
++  await mockClients(page);
++  await login(page, '/clients');
++  await expectNames(page, clients.slice(0, 20).map(client => client.name));
++  // Pagination has two unlabeled icon buttons; scope to its Page text.
++  const pager = page.getByText(/^Page \d+ of \d+$/).locator('..');
++  await expect(pager.getByRole('button').nth(0)).toBeDisabled();
++  await pager.getByRole('button').nth(1).click();
++  await expectNames(page, clients.slice(20).map(client => client.name));
++  await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
++  await expect(pager.getByRole('button').nth(1)).toBeDisabled();
++  await page.getByRole('combobox').filter({ has: page.getByRole('option', { name: '20', exact: true }) }).selectOption('10');
++  await expectNames(page, clients.slice(0, 10).map(client => client.name));
++  await expect(page.getByText('Page 1 of 3', { exact: true })).toBeVisible();
++});
++
++test('selecting a client opens quick view and the correct detail page', async ({ page }) => {
++  await mockClients(page);
++  await login(page, '/clients');
++  await expect(rows(page)).toHaveCount(20);
++  await rows(page).filter({ hasText: 'Test Client 01' }).click();
++  await expect(page.getByRole('heading', { name: 'Test Client 01', exact: true })).toBeVisible();
++  await page.getByRole('link', { name: 'View Details' }).click();
++  await expect(page).toHaveURL(/\/client\/test-1$/);
++  await expect(page.getByRole('heading', { level: 1, name: 'Test Client 01', exact: true })).toBeVisible();
++});
+diff --git a/frontend/e2e/dashboard.spec.ts b/frontend/e2e/dashboard.spec.ts
+new file mode 100644
+index 0000000..216f42e
+--- /dev/null
++++ b/frontend/e2e/dashboard.spec.ts
+@@ -0,0 +1,38 @@
++import { test, expect } from './helpers/fixtures';
++import { login } from './helpers/auth';
++import { deferred } from './helpers/api';
++import { metrics } from './helpers/extended-data';
++import { mockDashboard } from './helpers/extended-api';
++const card = (page: import('@playwright/test').Page, label: string) => page.getByRole('region', { name: 'Key Performance Indicators', exact: true }).locator('.metric-card').filter({ has: page.getByText(label, { exact: true }) });
++test.beforeEach(async ({ page }) => { await mockDashboard(page); });
++test('all six dashboard metrics match API values', async ({ page }) => {
++  await login(page, '/');
++  for (const [label, value] of [['Total Clients','37'], ['Active Clients','29'], ['At Risk Clients','6'], ['Avg Churn Probability','32%'], ['Avg Health Score','68'], ['Total MRR','₹1,23,456']]) {
++    await expect(card(page, label)).toContainText(value);
++  }
++});
++test('dashboard displays a loading state while metrics are pending', async ({ page }) => {
++  const gate = deferred();
++  await page.route(/\/dashboard\/metrics$/, async route => { await gate.promise; await route.fulfill({ json: metrics }); });
++  try { await login(page, '/'); await expect(page.getByRole('status', { name: /loading dashboard/i })).toBeVisible(); }
++  finally { gate.release(); }
++  await expect(card(page, 'Total Clients')).toContainText('37');
++});
++test('zero-client API response renders zero metrics without invented counts', async ({ page }) => {
++  await page.route(/\/dashboard\/metrics$/, route => route.fulfill({ json: { ...metrics, totalClients: 0, activeClients: 0, atRiskClients: 0, churnedClients: 0, avgHealthScore: 0, avgChurnProbability: 0, totalMRR: 0, totalARR: 0 } }));
++  await login(page, '/');
++  await expect(card(page, 'Total Clients')).toContainText('0');
++  await expect(page.getByRole('heading', { name: 'No client data yet' })).toBeVisible();
++  await expect(card(page, 'Total MRR')).toContainText('₹0');
++  await expect(card(page, 'Avg Churn Probability')).toContainText('0%');
++});
++test('dashboard API failure shows the server error and retry recovers', async ({ page }) => {
++  let failed = true;
++  await page.route(/\/dashboard\/metrics$/, route => route.fulfill(failed ? { status: 500, json: { detail: 'Controlled dashboard failure' } } : { json: metrics }));
++  await login(page, '/');
++  await expect(page.getByText("Couldn't load your dashboard", { exact: true })).toBeVisible();
++  await expect(page.getByText('Controlled dashboard failure', { exact: true })).toBeVisible();
++  failed = false;
++  await page.getByRole('button', { name: /try again/i }).click();
++  await expect(card(page, 'Total Clients')).toContainText('37');
++});
+diff --git a/frontend/e2e/helpers/api.ts b/frontend/e2e/helpers/api.ts
+new file mode 100644
+index 0000000..4733c6c
+--- /dev/null
++++ b/frontend/e2e/helpers/api.ts
+@@ -0,0 +1,39 @@
++import type { Page, Route } from '@playwright/test';
++import { clients } from './data';
++
++export function deferred() {
++  let release!: () => void;
++  const promise = new Promise<void>(resolve => { release = resolve; });
++  return { promise, release };
++}
++
++export async function mockClients(page: Page, gate?: ReturnType<typeof deferred>) {
++  const requested: URL[] = [];
++  await page.route(/\/api\/v1\/clients(?:\?|$)/, async route => {
++    const url = new URL(route.request().url());
++    requested.push(url);
++    if (gate) await gate.promise;
++    const search = (url.searchParams.get('search') ?? '').toLowerCase();
++    const risk = url.searchParams.get('riskLevel');
++    const status = url.searchParams.get('status');
++    // Simulated API contract, NOT a test of backend filtering implementation.
++    const data = clients.filter(client =>
++      (!search || [client.name, client.industry, client.accountManager ?? ''].some(value => value.toLowerCase().includes(search))) &&
++      (!risk || client.riskLevel === risk) && (!status || client.status === status)
++    );
++    await route.fulfill({ json: data });
++  });
++  await page.route(/\/api\/v1\/clients\/test-\d+$/, async route => {
++    const id = new URL(route.request().url()).pathname.split('/').pop();
++    const client = clients.find(item => item.id === id);
++    await route.fulfill({ status: client ? 200 : 404, json: client ?? { detail: 'Client not found' } });
++  });
++  return requested;
++}
++
++export const analysisEndpoint = /\/api\/v1\/client-analysis(?:\?|$)/;
++export async function providerError(route: Route) {
++  await route.fulfill({ status: 502, json: {
++    error: 'upstream_provider_error', detail: 'AI provider temporarily unavailable.',
++  } });
++}
+diff --git a/frontend/e2e/helpers/auth.ts b/frontend/e2e/helpers/auth.ts
+new file mode 100644
+index 0000000..a7b50dd
+--- /dev/null
++++ b/frontend/e2e/helpers/auth.ts
+@@ -0,0 +1,19 @@
++import { expect, type Page } from '@playwright/test';
++
++export async function login(page: Page, destination = '/ai-analysis') {
++  await page.goto(destination);
++  await expect(page).toHaveURL(/\/login$/);
++  await page.getByLabel('Email Address').fill('admin@email.com');
++  await page.getByLabel('Password', { exact: true }).fill('12345');
++  await page.getByRole('button', { name: 'Sign In', exact: true }).click();
++  // Fail at the login boundary instead of silently injecting authenticated state.
++  await expect(page).toHaveURL(url => url.pathname === destination);
++  await expect(page.getByRole('button', { name: 'User menu' })).toBeVisible();
++}
++
++export async function logout(page: Page) {
++  await page.getByRole('button', { name: 'User menu' }).click();
++  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
++  await expect(page).toHaveURL(/\/login$/);
++  await expect(page.getByLabel('Email Address')).toBeVisible();
++}
+diff --git a/frontend/e2e/helpers/data.ts b/frontend/e2e/helpers/data.ts
+new file mode 100644
+index 0000000..ada0ef1
+--- /dev/null
++++ b/frontend/e2e/helpers/data.ts
+@@ -0,0 +1,31 @@
++import type { Client, ClientAnalysisResponse } from '../../src/types/client.types';
++
++export const clients: Client[] = Array.from({ length: 25 }, (_, i) => ({
++  id: `test-${i + 1}`,
++  name: `Test Client ${String(i + 1).padStart(2, '0')}`,
++  industry: i % 2 === 0 ? 'SaaS' : 'FinTech',
++  tier: 'growth',
++  status: i % 3 === 0 ? 'at-risk' : 'active',
++  riskLevel: i % 2 === 0 ? 'high' : 'low',
++  churnProbability: i % 2 === 0 ? 75 : 15,
++  healthScore: i % 2 === 0 ? 40 : 90,
++  mrr: 2000, arr: 24000, contractValue: 24000,
++  contractStartDate: '2026-01-01', contractEndDate: '2026-12-31',
++  lastActivityDate: '2026-10-01', createdAt: '2026-01-01', updatedAt: '2026-10-01',
++  contact: { name: 'Test Contact', email: `contact${i + 1}@example.com`, role: 'Owner', isPrimary: true },
++  address: { country: 'India' }, tags: [],
++  accountManager: i % 2 === 0 ? 'Test Manager A' : 'Test Manager B',
++  campaign: 'Test Campaign', program: 'Test Program', workflowStatus: 'completed',
++  metadata: {},
++}));
++
++export const query = 'Give me churn analysis for Test Client 01';
++export const analysis: ClientAnalysisResponse = {
++  status: 'success',
++  client: { id: 'test-1', name: 'Test Client 01', program_type: 'Test Program', campaign_status: 'Active' },
++  summary: { text: 'Test summary: engagement declined and retention outreach is recommended.', satisfaction_score: 4 },
++  kpi: { interpretation: {} },
++  historical_context: { historical_matches: [] },
++  churn: { probability: 75, risk_level: 'high', analysis: 'Engagement declined.', red_flags: ['Declining engagement'], bottlenecks: [] },
++  recommendations: ['Schedule a retention call.'],
++};
+diff --git a/frontend/e2e/helpers/extended-api.ts b/frontend/e2e/helpers/extended-api.ts
+new file mode 100644
+index 0000000..1642640
+--- /dev/null
++++ b/frontend/e2e/helpers/extended-api.ts
+@@ -0,0 +1,27 @@
++import type { Page } from '@playwright/test';
++import { metrics, execution, report } from './extended-data';
++import type { WorkflowExecution, Report } from '../../src/types';
++export async function mockDashboard(page: Page) {
++  await page.route(/\/api\/v1\/dashboard\//, async route => {
++    const endpoint = new URL(route.request().url()).pathname.split('/').pop();
++    const data = endpoint === 'metrics' ? metrics : endpoint === 'health-distribution'
++      ? [{ label: '70-89', value: 37 }] : endpoint === 'token-consumption'
++      ? { totalTokens: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalRequests: 0,
++          nodeBreakdown: [], clientBreakdown: [], recentLogs: [],
++          perDay: {}, perWeek: {}, perMonth: {} } : [];
++    await route.fulfill({ json: data });
++  });
++}
++export async function mockWorkflows(page: Page, history: WorkflowExecution[] = [execution]) {
++  await page.route(/\/api\/v1\/workflows(?:\/|\?|$)/, async route => {
++    const path = new URL(route.request().url()).pathname;
++    if (path.endsWith('/logs')) return route.fulfill({ json: [{ timestamp: '10:00:00', level: 'info', message: 'Controlled workflow log' }] });
++    if (path.endsWith('/stats')) return route.fulfill({ json: { total: 1, active: 1, paused: 0, failed: 0, executionsToday: 1, successRatePercent: 100, averageExecutionTime: 12 } });
++    if (path.endsWith('/executions')) return route.fulfill({ json: history });
++    if (path.endsWith('/execute')) return route.fulfill({ json: execution });
++    return route.fulfill({ json: [] });
++  });
++}
++export async function mockReports(page: Page, reports: Report[] = [report]) {
++  await page.route(/\/api\/v1\/reports(?:\?|$)/, route => route.fulfill({ json: reports }));
++}
+diff --git a/frontend/e2e/helpers/extended-data.ts b/frontend/e2e/helpers/extended-data.ts
+new file mode 100644
+index 0000000..fa32966
+--- /dev/null
++++ b/frontend/e2e/helpers/extended-data.ts
+@@ -0,0 +1,22 @@
++import type { DashboardMetrics, Report, WorkflowExecution } from '../../src/types';
++export const metrics: DashboardMetrics = {
++  totalClients: 37, activeClients: 29, atRiskClients: 6, churnedClients: 2,
++  avgHealthScore: 68, avgChurnProbability: 32, totalMRR: 123456, totalARR: 1481472,
++  mrrGrowth: 4, healthGrowth: -2, riskGrowth: 1, activeGrowth: 3, recentAlerts: [],
++};
++export const execution: WorkflowExecution = {
++  id: 'exec-controlled-101', workflowId: 'w-101', workflowName: 'Controlled AI workflow',
++  clientId: 'test-1', clientName: 'Test Client 01', status: 'completed',
++  startedAt: '2026-01-02T10:00:00Z', completedAt: '2026-01-02T10:00:12Z', duration: 12,
++  stageCount: 2, successCount: 2, failureCount: 0, logs: [], nodes: [],
++};
++export const report: Report = {
++  id: 'report-controlled-1', name: 'Controlled Client Intelligence Report',
++  type: 'Client Intelligence', clientId: 'test-1', clientName: 'Test Client 01',
++  status: 'ready', format: 'PDF', sizeBytes: 2048, generatedBy: 'Test Analyst',
++  createdAt: '2026-01-02T10:00:00Z', updatedAt: '2026-01-02T10:00:00Z',
++  sections: ['Executive Summary', 'AI Churn Analysis'], version: 1,
++};
++export const clientSummary = 'Selected client summary from the controlled API.';
++export const clientRecommendation = 'Call the selected client to review declining engagement.';
++export const historicalClient = 'Controlled Historical Client';
+diff --git a/frontend/e2e/helpers/fixtures.ts b/frontend/e2e/helpers/fixtures.ts
+new file mode 100644
+index 0000000..deea1a1
+--- /dev/null
++++ b/frontend/e2e/helpers/fixtures.ts
+@@ -0,0 +1,26 @@
++import { test as base, expect } from '@playwright/test';
++
++// Each test uses a fresh context and real UI login; backend requests are isolated.
++export const test = base.extend<{ apiIsolation: void }>({
++  apiIsolation: [async ({ context, page }, use, testInfo) => {
++    const errors: string[] = [];
++    const unexpectedRequests: string[] = [];
++    page.on('pageerror', error => errors.push(`PAGE ERROR: ${error.message}`));
++    page.on('console', message => {
++      if (message.type() === 'error') errors.push(`CONSOLE: ${message.text()}`);
++    });
++    await context.route(url => /^\/api\/v1(?:\/|$)/.test(url.pathname), async route => {
++      unexpectedRequests.push(`${route.request().method()} ${route.request().url()}`);
++      await route.fulfill({
++        status: 501,
++        json: { detail: 'Unmocked API request in a frontend-only test.' },
++      });
++    });
++    await use();
++    if (errors.length) await testInfo.attach('browser-errors', {
++      body: errors.join('\n'), contentType: 'text/plain',
++    });
++    expect(unexpectedRequests, 'Every API request must have an explicit mock').toEqual([]);
++  }, { auto: true }],
++});
++export { expect };
+diff --git a/frontend/e2e/integration/backend.spec.ts b/frontend/e2e/integration/backend.spec.ts
+new file mode 100644
+index 0000000..a558865
+--- /dev/null
++++ b/frontend/e2e/integration/backend.spec.ts
+@@ -0,0 +1,100 @@
++// Deliberately imports Playwright directly: no page.route/context.route/API isolation.
++import { test, expect } from '@playwright/test';
++import { login } from '../helpers/auth';
++const backend = 'http://127.0.0.1:8002';
++test.beforeEach(async ({ request }) => {
++  const response = await request.post(`${backend}/__test__/reset`, { data: {} });
++  expect(response.ok()).toBe(true);
++});
++
++test('complete analysis uses real FastAPI, all workflow stages and controlled persistence', async ({ page, request }) => {
++  await login(page, '/ai-analysis');
++  await page.getByPlaceholder('e.g. Give me churn analysis for Yardworx Land Management').fill('Give me churn analysis for Yardworx Controlled Client');
++  const responseEvent = page.waitForResponse(response => response.url().endsWith('/api/v1/client-analysis') && response.request().method() === 'POST');
++  await page.getByRole('button', { name: 'Analyze Risk', exact: true }).click();
++  const response = await responseEvent;
++  expect(response.status()).toBe(200);
++  const result = await response.json();
++  expect(result.client).toMatchObject({ id: 'integration-1', name: 'Yardworx Controlled Client' });
++  expect(result.summary.text).toBe('Controlled generated summary: client engagement declined.');
++  expect(result.churn).toMatchObject({ probability: 80, risk_level: 'High' });
++  expect(result.recommendations).toEqual(['Schedule a controlled retention call.']);
++  await expect(page.getByRole('heading', { name: 'Yardworx Controlled Client', exact: true })).toBeVisible();
++  await expect(page.getByText('80%', { exact: true })).toBeVisible();
++  const state = await (await request.get(`${backend}/__test__/state`)).json();
++  const stored = state.tables.client_updates.find((row: { client_id: string }) => row.client_id === 'integration-1');
++  expect(stored.churn_probability).toBe(80);
++  expect(stored.summary).toBe(result.summary.text);
++  expect(stored.action_items).toEqual(result.recommendations);
++  expect(state.calls.filter((call: { provider: string }) => call.provider === 'llm')).toHaveLength(5);
++  expect(state.calls.filter((call: { provider: string }) => call.provider === 'embedding')).toHaveLength(2);
++  expect(state.calls.filter((call: { operation?: string }) => call.operation === 'rpc')).toHaveLength(2);
++  expect(state.tables.client_summary_embeddings).toHaveLength(1);
++  expect(state.tables.client_kpi_embeddings).toHaveLength(1);
++});
++
++test('real FastAPI rejects an empty analysis query before invoking providers', async ({ request }) => {
++  const response = await request.post(`${backend}/api/v1/client-analysis`, { data: { user_query: ' ' } });
++  expect(response.status()).toBe(400);
++  expect(await response.json()).toMatchObject({ detail: 'user_query must not be empty.' });
++  const state = await (await request.get(`${backend}/__test__/state`)).json();
++  expect(state.calls).toEqual([]);
++});
++
++test('real FastAPI rejects a missing required analysis field', async ({ request }) => {
++  const response = await request.post(`${backend}/api/v1/client-analysis`, { data: {} });
++  expect(response.status()).toBe(422);
++});
++
++test('real provider failure propagates as 502 through FastAPI to the browser', async ({ page, request }) => {
++  await request.post(`${backend}/__test__/reset`, { data: { fail_llm: true } });
++  await login(page, '/ai-analysis');
++  await page.getByPlaceholder('e.g. Give me churn analysis for Yardworx Land Management').fill('Give me churn analysis for Yardworx Controlled Client');
++  const responseEvent = page.waitForResponse(response => response.url().endsWith('/api/v1/client-analysis'));
++  await page.getByRole('button', { name: 'Analyze Risk', exact: true }).click();
++  expect((await responseEvent).status()).toBe(502);
++  await expect(page.getByRole('heading', { name: 'Analysis Failed' })).toBeVisible();
++  await expect(page.getByText('Controlled provider outage', { exact: true })).toBeVisible();
++  await expect(page.getByRole('button', { name: 'Analyze Risk', exact: true })).toBeEnabled();
++});
++
++const filterScenarios: { title: string; params: Record<string, string>; count: number }[] = [
++  { title: 'search', params: { search: 'Yardworx Control 03' }, count: 1 },
++  { title: 'risk', params: { riskLevel: 'high' }, count: 13 },
++  { title: 'status', params: { status: 'active' }, count: 12 },
++  { title: 'combined search/risk/status', params: { search: 'Yardworx Control 03', riskLevel: 'high', status: 'at-risk' }, count: 1 },
++];
++for (const scenario of filterScenarios) {
++  test(`real clients endpoint applies ${scenario.title} filtering`, async ({ request }) => {
++    const response = await request.get(`${backend}/api/v1/clients`, { params: scenario.params });
++    expect(response.status()).toBe(200);
++    const clients = await response.json();
++    expect(clients).toHaveLength(scenario.count);
++    for (const client of clients) {
++      if ('search' in scenario.params) expect(client.name).toContain(scenario.params.search);
++      if ('riskLevel' in scenario.params) expect(client.riskLevel).toBe(scenario.params.riskLevel);
++      if ('status' in scenario.params) expect(client.status).toBe(scenario.params.status);
++    }
++  });
++}
++
++test('browser search and filters work through the real clients API', async ({ page }) => {
++  await login(page, '/clients');
++  await expect(page.locator('table tbody tr')).toHaveCount(20);
++  await page.getByPlaceholder('Search by Client Name, Industry, or Account Manager...').fill('Yardworx Control 03');
++  await page.getByRole('combobox', { name: 'Risk Level', exact: true }).selectOption('high');
++  await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('at-risk');
++  await expect(page.locator('table tbody tr')).toHaveCount(1);
++  await expect(page.locator('table tbody')).toContainText('Yardworx Control 03');
++});
++
++test('backend report endpoint supplies an actual attachment with controlled client data', async ({ request }) => {
++  const reports = await (await request.get(`${backend}/api/v1/reports`)).json();
++  expect(reports.length).toBeGreaterThan(0);
++  const response = await request.get(`${backend}/api/v1/reports/${reports[0].id}/download`);
++  expect(response.status()).toBe(200);
++  expect(response.headers()['content-disposition']).toContain('attachment; filename=report-');
++  expect(response.headers()['content-type']).toContain('text/plain');
++  expect(await response.text()).toContain(reports[0].clientName);
++  expect(await response.text()).toContain('CHURN PREDICTOR AUDIT REPORT');
++});
+diff --git a/frontend/e2e/reports.spec.ts b/frontend/e2e/reports.spec.ts
+new file mode 100644
+index 0000000..1a4f9f0
+--- /dev/null
++++ b/frontend/e2e/reports.spec.ts
+@@ -0,0 +1,54 @@
++import { test, expect } from './helpers/fixtures';
++import { login } from './helpers/auth';
++import { mockReports } from './helpers/extended-api';
++import { report } from './helpers/extended-data';
++import { readFile } from 'node:fs/promises';
++test('report library displays API report metadata', async ({ page }) => {
++  await mockReports(page);
++  await login(page, '/reports');
++  const row = page.getByRole('row').filter({ hasText: report.name });
++  await expect(row).toContainText(report.clientName);
++  await expect(row).toContainText('Ready');
++  await expect(row).toContainText('PDF');
++});
++test('report generation posts selected configuration and adds the returned report', async ({ page }) => {
++  await mockReports(page, []);
++  let generated = false;
++  const configs: Record<string, unknown>[] = [];
++  await page.route(/\/api\/v1\/reports$/, async route => {
++    if (route.request().method() === 'POST') {
++      configs.push(route.request().postDataJSON()); generated = true;
++      await route.fulfill({ json: report });
++    } else await route.fulfill({ json: generated ? [report] : [] });
++  });
++  await login(page, '/reports');
++  await page.getByRole('heading', { name: 'Client Intelligence', exact: true }).locator('..').getByRole('button', { name: 'Generate', exact: true }).click();
++  await page.getByRole('combobox').filter({ has: page.getByRole('option', { name: 'Select Client...', exact: true }) }).selectOption('Yardworx Land Management');
++  await page.getByRole('button', { name: 'Generate', exact: true }).last().click();
++  await expect(page.getByRole('heading', { name: 'Report Ready', exact: true })).toBeVisible();
++  expect(configs).toHaveLength(1);
++  expect(configs[0]).toMatchObject({ reportType: 'Client Intelligence', clientName: 'Yardworx Land Management', format: 'PDF' });
++  await page.getByRole('button', { name: 'Done', exact: true }).click();
++  await expect(page.getByRole('row').filter({ hasText: report.name })).toContainText(report.clientName);
++});
++test('report download creates a file with the expected contents', async ({ page }) => {
++  test.fixme(true, 'ReportPreview Download has no handler; Export Data only shows a toast. The real backend TXT download is tested separately.');
++  await mockReports(page, [{ ...report, downloadUrl: '/api/v1/reports/report-controlled-1/download' }]);
++  await page.route(/\/reports\/report-controlled-1\/download$/, route => route.fulfill({
++    contentType: 'application/pdf', headers: { 'Content-Disposition': 'attachment; filename=controlled-report.pdf' },
++    body: '%PDF-1.4\nControlled report fixture\n%%EOF',
++  }));
++  await login(page, '/reports');
++  const row = page.getByRole('row').filter({ hasText: report.name });
++  await row.hover();
++  await row.getByTitle('Preview', { exact: true }).click();
++  // Activate this test once the UI connects its download control to the backend.
++  const downloadEvent = page.waitForEvent('download');
++  await page.getByRole('button', { name: 'Download PDF', exact: true }).click();
++  const download = await downloadEvent;
++  expect(await download.failure()).toBeNull();
++  const path = await download.path();
++  expect(path).not.toBeNull();
++  expect(download.suggestedFilename()).toBe('controlled-report.pdf');
++  expect((await readFile(path!, 'utf8'))).toContain('%PDF-1.4');
++});
+diff --git a/frontend/e2e/workflows.spec.ts b/frontend/e2e/workflows.spec.ts
+new file mode 100644
+index 0000000..99a45e7
+--- /dev/null
++++ b/frontend/e2e/workflows.spec.ts
+@@ -0,0 +1,38 @@
++import { test, expect } from './helpers/fixtures';
++import { login } from './helpers/auth';
++import { mockWorkflows } from './helpers/extended-api';
++import { execution } from './helpers/extended-data';
++test('Run Workflow sends one POST to the selected execution endpoint', async ({ page }) => {
++  await mockWorkflows(page, []);
++  const calls: { method: string; path: string; body: string | null }[] = [];
++  await page.route(/\/workflows\/w-101\/execute$/, async route => {
++    calls.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: route.request().postData() });
++    await route.fulfill({ json: execution });
++  });
++  await login(page, '/workflow');
++  await page.getByRole('button', { name: 'Run Workflow', exact: true }).click();
++  await expect(page.getByRole('heading', { name: 'AI Workflow Execution', exact: true })).toBeVisible();
++  expect(calls).toEqual([{ method: 'POST', path: '/api/v1/workflows/w-101/execute', body: null }]);
++});
++for (const status of ['completed', 'failed'] as const) {
++  test(`execution response displays ${status}`, async ({ page }) => {
++    await mockWorkflows(page, []);
++    await page.route(/\/workflows\/w-101\/execute$/, route => route.fulfill({ json: { ...execution, status, successCount: status === 'completed' ? 2 : 1, failureCount: status === 'failed' ? 1 : 0 } }));
++    await login(page, '/workflow');
++    await page.getByRole('button', { name: 'Run Workflow', exact: true }).click();
++    const banner = page.getByRole('heading', { name: 'AI Workflow Execution', exact: true }).locator('..');
++    await expect(banner).toContainText(status === 'completed' ? 'Completed' : 'Failed');
++    await expect(banner).toContainText(execution.id);
++  });
++}
++test('execution history shows API records and supports search', async ({ page }) => {
++  await mockWorkflows(page, [execution, { ...execution, id: 'exec-controlled-failed', clientName: 'Other Client', status: 'failed' }]);
++  await login(page, '/workflow');
++  const history = page.locator('#history-section');
++  await expect(history.locator('tbody tr')).toHaveCount(2);
++  await expect(history.locator('tbody')).toContainText('exec-controlled-failed');
++  await expect(history.locator('tbody')).toContainText('Failed');
++  await page.getByPlaceholder('Search ID or Client...').fill('exec-controlled-101');
++  await expect(history.locator('tbody tr')).toHaveCount(1);
++  await expect(history.locator('tbody')).toContainText('Test Client 01');
++});
+diff --git a/frontend/package-lock.json b/frontend/package-lock.json
+index bcdeb93..d1c14d6 100644
+--- a/frontend/package-lock.json
++++ b/frontend/package-lock.json
+@@ -49,6 +49,7 @@
+       },
+       "devDependencies": {
+         "@eslint/js": "^9.9.0",
++        "@playwright/test": "^1.64.0",
+         "@types/node": "^22.5.5",
+         "@types/react": "^19.0.0",
+         "@types/react-dom": "^19.0.0",
+@@ -1127,6 +1128,22 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/@playwright/test": {
++      "version": "1.64.1",
++      "resolved": "https://registry.npmjs.org/@playwright/test/-/test-1.64.1.tgz",
++      "integrity": "sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright": "1.64.1"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
+     "node_modules/@radix-ui/number": {
+       "version": "1.1.3",
+       "resolved": "https://registry.npmjs.org/@radix-ui/number/-/number-1.1.3.tgz",
+@@ -6207,6 +6224,35 @@
+         "node": ">= 6"
+       }
+     },
++    "node_modules/playwright": {
++      "version": "1.64.1",
++      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.64.1.tgz",
++      "integrity": "sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright-core": "1.64.1"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/playwright-core": {
++      "version": "1.64.1",
++      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.64.1.tgz",
++      "integrity": "sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "playwright-core": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
+     "node_modules/postcss": {
+       "version": "8.5.28",
+       "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.28.tgz",
+diff --git a/frontend/package.json b/frontend/package.json
+index 0f781a5..9d8c2bc 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -7,7 +7,14 @@
+     "dev": "vite",
+     "build": "tsc -b && vite build",
+     "lint": "eslint .",
+-    "preview": "vite preview"
++    "preview": "vite preview",
++    "test:e2e": "playwright test",
++    "test:e2e:headed": "playwright test --headed",
++    "test:e2e:ui": "playwright test --ui",
++    "test:e2e:report": "playwright show-report",
++    "test:e2e:typecheck": "tsc -p tsconfig.playwright.json",
++    "test:integration": "playwright test -c playwright.integration.config.ts",
++    "test:all": "npm run test:e2e && npm run test:integration"
+   },
+   "dependencies": {
+     "@hookform/resolvers": "^3.9.0",
+@@ -64,6 +71,7 @@
+     "tailwindcss": "^3.4.11",
+     "typescript": "^5.5.3",
+     "typescript-eslint": "^8.0.1",
+-    "vite": "^5.4.8"
++    "vite": "^5.4.8",
++    "@playwright/test": "^1.64.0"
+   }
+ }
+diff --git a/frontend/playwright.config.ts b/frontend/playwright.config.ts
+new file mode 100644
+index 0000000..cac6572
+--- /dev/null
++++ b/frontend/playwright.config.ts
+@@ -0,0 +1,32 @@
++/// <reference types="node" />
++
++import { defineConfig, devices } from '@playwright/test';
++
++export default defineConfig({
++  testDir: './e2e',
++  testMatch: /(?:auth|ai-analysis|clients|client-details|dashboard|workflows|reports)\.spec\.ts/,
++  fullyParallel: false,
++  workers: 1,
++  timeout: 60_000,
++  expect: { timeout: 10_000 },
++  retries: 0,
++  reporter: [['list'], ['html', { open: 'never' }]],
++  use: {
++    baseURL: 'http://localhost:3000',
++    trace: 'retain-on-failure',
++    screenshot: 'only-on-failure',
++    serviceWorkers: 'block',
++  },
++  projects: [{ name: 'chromium', use: {
++    ...devices['Desktop Chrome'],
++    viewport: { width: 1440, height: 1000 },
++    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined },
++  } }],
++  webServer: {
++    command: 'npm run dev -- --host localhost --port 3000 --strictPort',
++    url: 'http://localhost:3000',
++    reuseExistingServer: false,
++    timeout: 120_000,
++    env: { VITE_API_BASE_URL: '/api/v1' },
++  },
++});
+diff --git a/frontend/playwright.integration.config.ts b/frontend/playwright.integration.config.ts
+new file mode 100644
+index 0000000..5a091e2
+--- /dev/null
++++ b/frontend/playwright.integration.config.ts
+@@ -0,0 +1,22 @@
++import { defineConfig } from '@playwright/test';
++import frontendConfig from './playwright.config';
++
++export default defineConfig({
++  ...frontendConfig,
++  testDir: './e2e/integration',
++  outputDir: './test-results-integration',
++  testMatch: '**/*.spec.ts',
++  workers: 1,
++  reporter: [['list'], ['html', { outputFolder: 'playwright-report-integration', open: 'never' }]],
++  webServer: [
++    {
++      command: `"${process.env.PLAYWRIGHT_PYTHON ?? 'python'}" -m uvicorn tests.playwright_backend:app --host 127.0.0.1 --port 8002`,
++      cwd: '..', url: 'http://127.0.0.1:8002/', reuseExistingServer: false, timeout: 120_000,
++    },
++    {
++      command: 'npm run dev -- --host localhost --port 3000 --strictPort',
++      url: 'http://localhost:3000', reuseExistingServer: false, timeout: 120_000,
++      env: { VITE_API_BASE_URL: 'http://127.0.0.1:8002/api/v1' },
++    },
++  ],
++});
+diff --git a/frontend/src/pages/Clients/components/ClientFilters.tsx b/frontend/src/pages/Clients/components/ClientFilters.tsx
+index 1707846..51fa6a3 100644
+--- a/frontend/src/pages/Clients/components/ClientFilters.tsx
++++ b/frontend/src/pages/Clients/components/ClientFilters.tsx
+@@ -19,6 +19,7 @@ function FilterChip({ label, value, options, onChange }: FilterChipProps) {
+   return (
+     <div className="relative group">
+       <select
++        aria-label={label}
+         value={value}
+         onChange={(e) => onChange(e.target.value)}
+         className={cn(
+diff --git a/frontend/src/pages/Clients/components/Pagination.tsx b/frontend/src/pages/Clients/components/Pagination.tsx
+index 6e4c362..99f3605 100644
+--- a/frontend/src/pages/Clients/components/Pagination.tsx
++++ b/frontend/src/pages/Clients/components/Pagination.tsx
+@@ -27,6 +27,7 @@ export function Pagination() {
+         <div className="hidden sm:flex items-center gap-2">
+           <span className="text-[12.5px] text-muted-foreground">Rows per page:</span>
+           <select
++            aria-label="Rows per page"
+             value={pageSize}
+             onChange={(e) => setPageSize(Number(e.target.value))}
+             className="bg-transparent text-[12.5px] font-medium text-foreground outline-none cursor-pointer"
+@@ -40,6 +41,7 @@ export function Pagination() {
+ 
+       <div className="flex items-center gap-1">
+         <button
++          aria-label="Previous page"
+           onClick={() => setPage(page - 1)}
+           disabled={page === 1}
+           className="h-8 w-8 flex items-center justify-center rounded border border-border bg-card text-muted-foreground hover:bg-secondary disabled:opacity-50 disabled:pointer-events-none transition-colors"
+@@ -50,6 +52,7 @@ export function Pagination() {
+           Page {page} of {totalPages}
+         </span>
+         <button
++          aria-label="Next page"
+           onClick={() => setPage(page + 1)}
+           disabled={page === totalPages}
+           className="h-8 w-8 flex items-center justify-center rounded border border-border bg-card text-muted-foreground hover:bg-secondary disabled:opacity-50 disabled:pointer-events-none transition-colors"
+diff --git a/frontend/src/pages/Dashboard/DashboardPage.tsx b/frontend/src/pages/Dashboard/DashboardPage.tsx
+index cc123c5..8cbf5f5 100644
+--- a/frontend/src/pages/Dashboard/DashboardPage.tsx
++++ b/frontend/src/pages/Dashboard/DashboardPage.tsx
+@@ -23,6 +23,10 @@ export function DashboardPage() {
+   const [refreshKey, setRefreshKey] = React.useState(0);
+   const { metrics, churnRiskChart, revenueChart, healthDistribution, isLoading, isError, errorMessage, refetch } = useDashboard();
+ 
++  if (isLoading) {
++    return <ContentWrapper><div role="status" aria-label="Loading dashboard" className="section-card p-8">Loading dashboard…</div></ContentWrapper>;
++  }
++
+   // If the core metrics call fails, the whole page has nothing meaningful
+   // to show (every section below depends on `metrics` in some way), so we
+   // show a single full-page error state with a retry button instead of
+@@ -111,6 +115,14 @@ export function DashboardPage() {
+     ]
+   : undefined;
+ 
++  if (metrics?.totalClients === 0) {
++    return <ContentWrapper className="space-y-5">
++      <h1 className="text-heading-2">No client data yet</h1>
++      <p className="text-muted-foreground">Add client data to see portfolio insights.</p>
++      <section aria-label="Key Performance Indicators"><KPISection kpis={kpiData} /></section>
++    </ContentWrapper>;
++  }
++
+   const healthBreakdown = healthDistribution
+   ? {
+       healthy:
+diff --git a/frontend/src/pages/Dashboard/components/KPISection.tsx b/frontend/src/pages/Dashboard/components/KPISection.tsx
+index 552a0b9..54d01f3 100644
+--- a/frontend/src/pages/Dashboard/components/KPISection.tsx
++++ b/frontend/src/pages/Dashboard/components/KPISection.tsx
+@@ -87,8 +87,9 @@ const TREND_ARROW: Record<string, string> = {
+ // ============================================================
+ 
+ function AnimatedNumber({ value }: { value: string | number }) {
+-  const numericValue = typeof value === 'number' ? value : parseFloat(String(value));
+-  const isNumeric = !isNaN(numericValue);
++  const numericValue = typeof value === 'number' ? value : 0;
++  // Formatted strings (such as 32% and currency) must keep their units.
++  const isNumeric = typeof value === 'number' && Number.isFinite(value);
+ 
+   const [displayed, setDisplayed] = React.useState(isNumeric ? 0 : value);
+ 
+diff --git a/frontend/tsconfig.playwright.json b/frontend/tsconfig.playwright.json
+new file mode 100644
+index 0000000..d068a54
+--- /dev/null
++++ b/frontend/tsconfig.playwright.json
+@@ -0,0 +1,18 @@
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "types": [
++      "node"
++    ]
++  },
++  "include": [
++    "playwright.config.ts",
++    "playwright.integration.config.ts",
++    "e2e/**/*.ts"
++  ]
++}
+diff --git a/requirements-playwright.txt b/requirements-playwright.txt
+new file mode 100644
+index 0000000..059ca2d
+--- /dev/null
++++ b/requirements-playwright.txt
+@@ -0,0 +1,10 @@
++# Controlled integration suite; no model download or external credentials needed.
++fastapi>=0.115,<1
++uvicorn>=0.30,<1
++supabase>=2,<3
++groq>=0.11,<2
++gspread>=6,<7
++google-auth>=2,<3
++pydantic-settings>=2,<3
++httpx>=0.27,<1
++numpy>=1.26,<3
+diff --git a/src/api/routes/clients.py b/src/api/routes/clients.py
+index 3b88688..bccafb8 100644
+--- a/src/api/routes/clients.py
++++ b/src/api/routes/clients.py
+@@ -10,8 +10,15 @@ router = APIRouter(
+ controller = ClientsController()
+ 
+ @router.get("", response_model=List[Dict[str, Any]])
+-def list_clients():
+-    return controller.get_all_clients()
++def list_clients(search: str = "", riskLevel: str = "", status: str = ""):
++    # Apply UI filters to mapped records; preserve the existing client scope.
++    clients = controller.get_all_clients()
++    query = search.strip().casefold()
++    return [client for client in clients if
++            (not query or any(query in str(client.get(field, "")).casefold()
++                              for field in ("name", "industry", "accountManager")))
++            and (not riskLevel or client.get("riskLevel") == riskLevel)
++            and (not status or client.get("status") == status)]
+ 
+ @router.get("/{client_id}", response_model=Dict[str, Any])
+ def get_client(client_id: str):
+diff --git a/src/providers/embeddings/huggingface_provider.py b/src/providers/embeddings/huggingface_provider.py
+index 1fe5623..7fbbd9e 100644
+--- a/src/providers/embeddings/huggingface_provider.py
++++ b/src/providers/embeddings/huggingface_provider.py
+@@ -1,7 +1,6 @@
+ from typing import List
+ 
+ import numpy as np
+-from sentence_transformers import SentenceTransformer
+ 
+ from src.base.base_provider import BaseProvider
+ from src.core.settings import settings
+@@ -28,6 +27,7 @@ class HuggingFaceProvider(BaseProvider):
+         model_name = getattr(settings, "embedding_model", None) or "sentence-transformers/all-mpnet-base-v2"
+ 
+         try:
++            from sentence_transformers import SentenceTransformer
+             self.model = SentenceTransformer(model_name)
+         except Exception as error:
+             raise ProviderException(
+diff --git a/tests/__init__.py b/tests/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/playwright_backend.py b/tests/playwright_backend.py
+new file mode 100644
+index 0000000..f1f6bca
+--- /dev/null
++++ b/tests/playwright_backend.py
+@@ -0,0 +1,117 @@
++"""Dedicated loopback test server. Real src.main routes/controllers/workflows;
++only the external provider boundaries are replaced. Never deploy this entrypoint.
++Run with requirements-playwright.txt. Production src.main has no test endpoints.
++"""
++import copy
++import json
++from threading import RLock
++from unittest.mock import patch
++from fastapi import Body
++from src.core.exceptions import ProviderException
++from src.providers.db.supabase_provider import SupabaseProvider
++from src.providers.llm.groq_provider import GroqProvider
++from src.providers.external.google_sheet_provider import GoogleSheetsProvider
++from src.providers.embeddings.huggingface_provider import HuggingFaceProvider
++
++lock = RLock()
++state = {}
++
++def reset(fail_llm=False):
++    with lock:
++        state.clear()
++        state.update(tables={}, calls=[], llm_failure=fail_llm)
++        state['tables']['client_updates'] = [
++            {'id': i, 'client_id': f'integration-{i}',
++             'client_name': 'Yardworx Controlled Client' if i == 1 else f'Yardworx Control {i:02}',
++             'churn_probability': 75 if i % 2 else 10,
++             'satisfaction_score': 25 if i % 2 else 90,
++             'summary': f'Controlled existing summary {i}',
++             'flags': [], 'bottlenecks': [], 'action_items': [],
++             'timestamp': '2026-01-02T10:00:00Z'}
++            for i in range(1, 26)
++        ]
++
++reset()
++
++def database(_self, operation, table='', **kwargs):
++    with lock:
++        state['calls'].append({'provider': 'database', 'operation': operation, 'table': table,
++                               'function': kwargs.get('function_name')})
++        rows = state['tables'].setdefault(table, [])
++        filters = kwargs.get('filters', {})
++        matching = [row for row in rows if all(str(row.get(k)) == str(v) for k, v in filters.items())]
++        if operation == 'select': return copy.deepcopy(matching)
++        if operation == 'rpc':
++            vector = kwargs.get('parameters', {}).get('query_embedding', [])
++            if len(vector) != 768: raise ProviderException('Invalid test vector dimension')
++            return [{'id': 'historical-control', 'client_id': 'historical-client',
++                     'client_name': 'Controlled Historical Client', 'similarity': 0.87,
++                     'summary': 'Historical engagement decline.', 'churn_probability': 80,
++                     'metadata': {'client_id': 'historical-client', 'client_name': 'Controlled Historical Client'}}]
++        if operation == 'insert':
++            data = kwargs['data']; data = data if isinstance(data, list) else [data]
++            added = []
++            for item in data:
++                record = {**copy.deepcopy(item), 'id': len(rows) + 100}
++                rows.append(record); added.append(record)
++            return copy.deepcopy(added)
++        if operation == 'update':
++            for row in matching: row.update(copy.deepcopy(kwargs['data']))
++            return copy.deepcopy(matching)
++        if operation == 'delete':
++            state['tables'][table] = [row for row in rows if row not in matching]
++            return copy.deepcopy(matching)
++        raise AssertionError(f'Unexpected database operation: {operation}')
++
++def llm(_self, **kwargs):
++    with lock:
++        state['calls'].append({'provider': 'llm', 'system_prompt': kwargs.get('system_prompt', '')[:100]})
++        if state['llm_failure']: raise ProviderException('Controlled provider outage')
++    # Each real node parses/validates the subset it requires from this controlled response.
++    payload = {'client_name': 'Yardworx Controlled Client', 'client_id': 'integration-1',
++               'summary': 'Controlled generated summary: client engagement declined.',
++               'satisfaction_score': 20, 'probability': 80,
++               'analysis': 'Controlled analysis: retention intervention is required.',
++               'red_flags': ['Declining engagement'], 'bottlenecks': ['Low conversion'],
++               'historical_insights': [], 'recommendations': ['Schedule a controlled retention call.'],
++               'overall_health': 'At Risk', 'business_summary': 'Controlled KPI interpretation.',
++               'positive_signals': [], 'risk_factors': ['Low engagement']}
++    return {'content': json.dumps(payload), 'usage': {'prompt_tokens': 10, 'completion_tokens': 20, 'total_tokens': 30}, 'model': 'controlled-test-model'}
++
++def sheet(_self, client_name='Yardworx Controlled Client'):
++    with lock: state['calls'].append({'provider': 'sheets', 'client': client_name})
++    if client_name.casefold() != 'yardworx controlled client': return None
++    data = {'clientId': 'integration-1', 'clientName': 'Yardworx Controlled Client',
++            'programType': 'Test Program', 'programDuration': '12 months',
++            'programStage': 'Active', 'campaignStatus': 'Active',
++            'currentSatisfaction': 20, 'spend7D': 100, 'leads7D': 5, 'appts7D': 2,
++            'updates': [{'created_at': '2026-01-02T10:00:00Z', 'creator_name': 'Test Analyst',
++                         'body': 'Client engagement declined and a retention call is needed.'}]}
++    return {'Client_name': 'Yardworx Controlled Client', 'Updates': json.dumps([data])}
++
++def init_embedding(self):
++    self.expected_dimension = 768
++
++def embedding(_self, text):
++    with lock: state['calls'].append({'provider': 'embedding', 'characters': len(text)})
++    return {'embedding': [1.0] + [0.0] * 767, 'dimension': 768, 'model': 'controlled-embedding'}
++
++# Patches are installed before importing src.main, which constructs its controllers.
++# Neither controller.analyze nor orchestrator.run nor any workflow node is stubbed.
++patches = [patch.object(SupabaseProvider, 'execute', database),
++           patch.object(GroqProvider, 'execute', llm),
++           patch.object(GoogleSheetsProvider, 'get_client', sheet),
++           patch.object(GoogleSheetsProvider, 'get_all_records', lambda self: [sheet(self)]),
++           patch.object(HuggingFaceProvider, '__init__', init_embedding),
++           patch.object(HuggingFaceProvider, 'generate_embedding', embedding)]
++for item in patches: item.start()
++from src.main import app
++
++@app.post('/__test__/reset')
++def reset_endpoint(options: dict = Body(default={})):
++    reset(bool(options.get('fail_llm', False)))
++    return {'status': 'reset'}
++
++@app.get('/__test__/state')
++def inspect_state():
++    with lock: return copy.deepcopy(state)

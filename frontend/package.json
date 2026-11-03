@@ -14,7 +14,11 @@
     "test:e2e:report": "playwright show-report",
     "test:e2e:typecheck": "tsc -p tsconfig.playwright.json",
     "test:integration": "playwright test -c playwright.integration.config.ts",
-    "test:all": "npm run test:e2e && npm run test:integration"
+    "test:all": "npm run test:e2e && npm run test:integration",
+    "test:nodes": "playwright test -c playwright.nodes.config.ts",
+    "test:nodes:ui": "playwright test -c playwright.nodes.config.ts --ui",
+    "test:nodes:report": "playwright show-report playwright-report-nodes",
+    "test:complete": "npm run test:all && npm run test:nodes"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
